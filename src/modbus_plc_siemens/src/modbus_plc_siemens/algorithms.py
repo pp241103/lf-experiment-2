@@ -29,11 +29,11 @@ triggers = dict.fromkeys(('R/S',
 ##########################################
 
 class MainApi(BaseApi):
-    
+
     ######################################
     #          Service methods           #
     ######################################
-    
+
     def show_warehouse(self):
         """Show all warehouse' cells in the table
         :param self: RApi object
@@ -63,8 +63,8 @@ class MainApi(BaseApi):
         :param self: RApi object
         """
         while triggers['checking']:
-            if not loader_0_tasks and triggers['waiting'] and getqueue(shares):
-                queue = [d + 1 for d in getqueue(shares)]
+            if not loader_0_tasks and triggers['waiting'] and get_queue(shares):
+                queue = [d + 1 for d in get_queue(shares)]
                 column = None
                 line = None
                 way = None
@@ -73,7 +73,7 @@ class MainApi(BaseApi):
                 # make necessary tasks
                 table = self.execute('SELECT * FROM warehouse_arrival AS arr ORDER BY arr.column', True)
                 for color in queue:
-                    for i in len(table):
+                    for i in range(len(table)):
                         if table[i][0] not in (color, color + 4, color + 8):
                             continue  # for table
                         for cell in range(1, 5):
@@ -101,20 +101,20 @@ class MainApi(BaseApi):
         """Add new blocks to the warehouse
         :param self: RApi object
         :param blocks: coordinates of new blocks
-        :type tasks: tuple of 2-element' tuples (column, line)
-                     - column: warehouse' column
-                               int in range (1, 13)
-                               counting from conveyor 1.1 to conveyor 4.1
-                     - line: warehouse' line
-                             int in range (1, 4)
-                             counting from bottom to top
+        :type blocks: tuple of 2-element' tuples (column, line)
+                      - column: warehouse' column
+                                int in range (1, 13)
+                                counting from conveyor 1.1 to conveyor 4.1
+                      - line: warehouse' line
+                              int in range (1, 4)
+                              counting from bottom to top
         """
 
         for block in blocks:
             if (not isinstance(block, tuple)) or (len(block) != 2):
                 print('- Error: incorrect coordinates structure!')
                 return
-            elif (task[0] not in range(1, 13)) or (task[1] not in range(1, 5)):
+            elif (block[0] not in range(1, 13)) or (block[1] not in range(1, 5)):
                 print('- Error: incorrect coordinates values!')
                 return
 
@@ -323,7 +323,7 @@ class MainApi(BaseApi):
             else:
                 triggers['checking'] = False
                 if len(loader_0_tasks) > 1:
-                    loader_0_tasks
+                    loader_0_tasks.clear()
                 print('- Warning: not all tasks are completed!\n' +
                       '(queue is cleared, checking new tasks is prohibited)')
         else:

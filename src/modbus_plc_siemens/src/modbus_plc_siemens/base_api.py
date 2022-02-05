@@ -1,5 +1,4 @@
 import psycopg2 as pg
-import math as m
 import rospy
 
 from std_msgs.msg import Int32MultiArray, Float64MultiArray
@@ -114,7 +113,7 @@ class BaseApi:
             self.sleep(time)
         else:
             return
-        
+
         out_ports[port] = 0
         self.send(out_ports)
 
@@ -136,11 +135,11 @@ class BaseApi:
                 conn.commit()
                 if result:
                     return cursor.fetchall()
-                    
-    def get_color():
+
+    def get_color(self):
         """Get current color from analog sensor"""
-        print(f'- Current color: {R.get(0)}')
-    
+        print(f'- Current color: {self.get(0)}')
+
     ##################################################################################
 
     ######################################
@@ -166,21 +165,22 @@ class BaseApi:
 
     # noinspection PyMethodParameters
     def __spectator_update(msg):
-    """Service callback-function:
-    Read wallet shares and write them to list
-    Make wallet shares available in app
-        """
-        global shares
+        """Service callback-function:
+        Read wallet shares and write them to list
+        Make wallet shares available in app
+            """
 
-        del shares[0: len(shares)]
-        # noinspection PyUnresolvedReferences
-        shares.append(msg.data)
+    global shares
+
+    del shares[0: len(shares)]
+    # noinspection PyUnresolvedReferences
+    shares.append(msg.data)
 
     spectator = rospy.Subscriber("spectator",
                                  Float64MultiArray,
                                  __spectator_update,
                                  queue_size=500)
-                                 
+
     # --------------------------------------------------------------------------------
 
     ######################################
@@ -192,6 +192,5 @@ class BaseApi:
                           queue_size=500)
 
     output = Int32MultiArray()
-    
-    # ------------------------------------------------------------------------------------
-    
+
+# ------------------------------------------------------------------------------------

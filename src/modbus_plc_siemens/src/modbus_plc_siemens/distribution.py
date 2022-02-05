@@ -8,7 +8,6 @@ colors = {0: ' \033[43m   \033[0m',
 
 # ===============================================================================================================
 
- 
 def get_sizes(shares, amount):
     """Transform wallet shares to category sizes optimally
     catsizes = [cs1, cs2, cs3, cs4] - blocks numbers of each color category
@@ -61,8 +60,6 @@ def get_queue(shares):
     """Transform category sizes to block queue optimally
     catsizes = [cs1, cs2, cs3, cs4] - blocks numbers of each color category
     """
-
-    global shares
     if not shares:
         return 0
 
@@ -71,7 +68,7 @@ def get_queue(shares):
     lim = 0.03  # MSE-limit
     while True:
         error = 0
-        catsizes = getsizes(shares, amount)
+        catsizes = get_sizes(shares, amount)
         for cs, w in zip(catsizes, shares):
             error += (cs / amount - w) ** 2
         error = m.sqrt(error / 4)
@@ -89,7 +86,6 @@ def get_queue(shares):
 
     point = [0] * 4
     delta = [0] * 4
-
     queue = []
 
     for _ in range(sum(catsizes)):
@@ -107,7 +103,7 @@ def get_queue(shares):
 
 
 if __name__ == "__main__":
-    
+
     while True:
         try:
             if input('Run the algorithim? (0 or another key): ') == '0':
@@ -119,25 +115,26 @@ if __name__ == "__main__":
 
             shares = [yellow, blue, green, purple]
             assert all(s >= 0 for s in shares) and sum(shares) == 1
-            queue = distribute(shares)
-            
-            for d, ln in zip(queue, range(len(queue))):
+            queue = get_queue(shares)
+
+            blocks = None
+            length = len(queue)
+            for d, ln in zip(queue, range(length)):
                 blocks = blocks + colors[d]
                 if (ln + 1) % 20 == 0 and ln + 1 != length:
                     blocks = blocks + '\n\n'
 
             print(f'{blocks}\n')
             print(f'\033[33mYellow blocks: {queue.count(0)} '
-                  f'(block share: {catsizes[0] / length:.5g}; wallet share: {wallets[0]})\033[0m')
+                  f'(block share: {queue.count(0) / length:.5g}; wallet share: {shares[0]})\033[0m')
             print(f'\033[34mBlue blocks: {queue.count(1)} '
-                  f'(block share: {catsizes[1] / length:.5g}; wallet share: {wallets[1]})\033[0m')
+                  f'(block share: {queue.count(1) / length:.5g}; wallet share: {shares[1]})\033[0m')
             print(f'\033[32mGreen blocks: {queue.count(2)} '
-                  f'(block share: {catsizes[2] / length:.5g}; wallet share: {wallets[2]})\033[0m')
+                  f'(block share: {queue.count(2) / length:.5g}; wallet share: {shares[2]})\033[0m')
             print(f'\033[35mPurple blocks: {queue.count(3)} '
-                  f'(block share: {catsizes[3] / length:.5g}; wallet share: {wallets[3]}\033[0m)')
+                  f'(block share: {queue.count(3) / length:.5g}; wallet share: {shares[3]}\033[0m)')
             print('=' * 80 + '\n')
-            
+
         except:
             print('- Error: incorrect entered data!\n' + '=' * 80 + '\n')
             continue
-    
