@@ -1,9 +1,10 @@
 #!/usr/bin/env python
-import sys
 import gnureadline
+import sys
 
 from contextlib import suppress
-from modbus_plc_siemens.r_api import *
+from modbus_plc_siemens.base_api import rospy
+from modbus_plc_siemens.algorithms import MainApi
 from modbus_plc_siemens.client_init import ModbusClient
 
 ##################################################################################
@@ -20,49 +21,42 @@ if __name__ == "__main__":
     modbus_port = 502
 
     modclient = None
-    R = Rapi()
+    R = MainApi()
 
     try:
         modclient = ModbusClient(modbus_host, modbus_port)
-        R.print("Modbus client session successfully started")
+        R.print("Modbus client session started")
 
     except Exception as e:
-        R.error("Modbus client session failed to start")
+        R.error("Modbus client session didn't start")
         R.error(f"[REASON] {e}")
         exit(1)
 
-    R.sleep(1)
-
     # in_ports = modclient.readRegisters(0, 112)
-    R.print("(Press any button on FT to proceed)")
-    
-    # waiting for pressing any button
-    while not in_ports:
-        R.sleep(0.001)
     # r_print(out_ports)
 
     ######################################
     #            Application             #
     ######################################
 
-    R.print("Available commands: show, clear, add*(.), run, stop, exit (act*(.), set(.), color)")
+    R.print("Available commands: "
+            "run, stop, exit / "
+            "show, clear, add*(.) / "
+            "act*(.), set(.), color / ")
 
     command = None
+    methods = {'run': R.run_factory,
+               'stop': R.stop_factory,
+               'show': R.show_warehouse,
+               'clear': R.clear_warehouse,
+               'color': R.get_color}
 
     while command != "exit":
         command = input("Command: ")
 
         try:
-            if command == "show":
-                R.show_warehouse()
-            elif command == "clear":
-                R.clear_warehouse()
-            elif command == "run":
-                R.run_factory()
-            elif command == "stop":
-                R.stop_factory()
-            elif command == "color":
-                print(f'- Color: {R.get(0)}')
+            if command in ('run', 'stop', 'show', 'clear', 'color'):
+                methods[command]()
             elif command.startswith(("add", "act", "set")):
                 exec('R.' + command)
             elif command == "exit":
@@ -70,13 +64,14 @@ if __name__ == "__main__":
                 # application closing
                 sys.tracebacklimit = 0
                 with suppress(Exception):
-                    R.print("Shutting down modbus client session...")
-                    rospy.signal_shutdown("Server shutting down")
-                    # modclient.stopListening()
+                    R.print("Modbus client session is shutting down")
+                    rospy.signal_shutdown("server shutting down")
+                    modclient.stopListening()
 
             else:
-                # print('- This command is not available!')
-                exec(command)
+                print('- This command is not available!')
+                # exec(command)
 
         except Exception as e:
+            R.error('while executing the command')
             R.error(f"[REASON] {e}")

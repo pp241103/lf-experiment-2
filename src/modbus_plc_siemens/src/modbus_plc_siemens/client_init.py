@@ -2,20 +2,20 @@ from modbus.modbus_wrapper import ModbusWrapperClient
 
 
 class ModbusClient(ModbusWrapperClient):
-    def __init__(self, host, port=502, rate=50, reset_registers=True):
-        """
-            :param host: Contains the IP address of the modbus server
-            :type host: string
-            :param rate: How often the registers on the modbus server should be read per second
-            :type rate: float
-            :param reset_registers: Defines if the holding registers should be reset to 0 after they have been read. Only possible if they are writeable
-            :type reset_registers: bool
+    def __init__(self, host, port=502, rate=50):
+        """Initialize the modbus client specially
+    :param host: IP address of the modbus server
+    :type host: str
+    :param port: port of the modbus server, defaults to 502
+    :type host: int
+    :param rate: registers reading frequency per second, defaults to 50
+    :type rate: int
         """
 
-        ModbusWrapperClient.__init__(self, host, port, rate, reset_registers)
-
-        self.setReadingRegisters(0, 112)
+        ModbusWrapperClient.__init__(self, host, port, rate)
+        
         self.setWritingRegisters(112, 106)
+        self.setReadingRegisters(0, 112)
         self.startListening()
 
         self.readRegisters(0, 1)

@@ -3,25 +3,23 @@ import math as m
 import rospy
 
 from std_msgs.msg import Int32MultiArray, Float64MultiArray
-from inspect import getmembers, isfunction
-from modbus.process import ProcessWrapper
+# from modbus.process import ProcessWrapper
 from modbus.post_threading import Post
 from contextlib import closing
 
-##########################################
-#           ROS and FT methods           #
-##########################################
-
+# ------------------------------------------------------------------------------------
 shares = []
 in_ports = []
 out_ports = [0] * 106
 
 
-class Rapi:
-    # noinspection PyUnresolvedReferences
-    from modbus_plc_siemens import algorithms
-    locals().update(dict((k, v) for (k, v) in getmembers(algorithms, isfunction)))
-    del algorithms
+######################################################################################
+
+##########################################
+#           ROS and FT methods           #
+##########################################
+
+class BaseApi:
 
     def __init__(self):
         self.post = Post(self)
@@ -31,7 +29,7 @@ class Rapi:
     ######################################
 
     @staticmethod
-    def print(msg):
+    def print(msg: str):
         """Print ROS' message
     :param msg: message to print
     :type msg: str
@@ -39,17 +37,17 @@ class Rapi:
         rospy.loginfo(msg)
 
     @staticmethod
-    def error(msg):
+    def error(msg: str):
         """Print ROS' error-message
     :param msg: message to print
     :type msg: str
         """
         rospy.logerr(msg)
 
-    #######################################################
+    ##################################################################################
 
     @staticmethod
-    def sleep(time):
+    def sleep(time: float):
         """Sleep timer
     :param time: seconds to sleep
     :type time: float
@@ -62,10 +60,10 @@ class Rapi:
         """
         rospy.spin()
 
-    #######################################################
+    ##################################################################################
 
     @staticmethod
-    def get(port):
+    def get(port: int):
         """Get input port value
     :param port: input port number
     :type port: int in range (0, 112)
@@ -120,7 +118,7 @@ class Rapi:
         out_ports[port] = 0
         self.send(out_ports)
 
-    #######################################################
+    ##################################################################################
 
     @staticmethod
     def execute(query: str, result=False):
@@ -138,103 +136,12 @@ class Rapi:
                 conn.commit()
                 if result:
                     return cursor.fetchall()
+                    
+    def get_color():
+        """Get current color from analog sensor"""
+        print(f'- Current color: {R.get(0)}')
     
-    @staticmethod
-    def getsizes(shares, amount):
-        """Transform wallet shares to category sizes optimally
-    catsizes = [cs1, cs2, cs3, cs4] - blocks numbers of each color category
-    :param shares: list of wallet shares
-    :type shares: list in range (4)
-    :param amount: total amount of blocks
-    :type amount: int
-    :return: list of category sizes
-    :rtype: list in range (4)
-        """
-
-        catsizes = [w * amount for w in shares]
-
-        for catsize in catsizes:
-            # if any block catsize is non-integer...
-            if catsize - int(catsize) > 0:
-                # ==============================================================
-                # Round all shares optimally (0.5, +1, -1)
-                trig = True
-                for k, cs in enumerate(catsizes):
-                    if cs - int(cs) == 0.5:
-                        if trig:
-                            catsizes[k] = int(cs + 0.5)
-                            trig = False
-                        else:
-                            catsizes[k] = int(cs - 0.5)
-                            trig = True
-                    else:
-                        catsizes[k] = round(cs)
-                # ==============================================================
-                if amount - sum(catsizes) == 1:
-                    maxcat = max([cs - int(cs) for cs in catsizes])
-                    for k, cs in enumerate(catsizes):
-                        if cs - int(cs) == maxcat:
-                            catsizes[k] += 1
-                            break
-                elif sum(catsizes) - amount == 1:
-                    mincat = min([cs - int(cs) for cs in catsizes])
-                    for k, cs in reversed(list(enumerate(catsizes))):
-                        if cs - int(cs) == mincat:
-                            catsizes[k] -= 1
-                            break
-                # ==============================================================
-                return catsizes
-        else:
-            return [int(cs) for cs in catsizes]
-
-    @staticmethod
-    def getqueue():
-        """Transform category sizes to block queue optimally
-    catsizes = [cs1, cs2, cs3, cs4] - blocks numbers of each color category
-        """
-
-        global shares
-        if not shares:
-            return 0
-
-        # Defining catsizes matching the MSE-limit
-        amount = 1  # starting amount
-        lim = 0.03  # MSE-limit
-        while True:
-            error = 0
-            catsizes = self.getsizes(shares, amount)
-            for cs, w in zip(catsizes, shares):
-                error += (cs / amount - w) ** 2
-            error = m.sqrt(error / 4)
-            if error > lim:
-                amount += 1
-            else:
-                break
-
-        # ======================================================================
-        # Evenly distributing algorithm of block queue using dimensional method
-        # (catsizes = (cs1; cs2; cs3; cs4) - 4D-vector)
-
-        fullvec = sum([cs * cs for cs in catsizes])
-        passedvec = 0
-
-        point = [0] * 4
-        delta = [0] * 4
-
-        queue = []
-
-        for _ in range(sum(catsizes)):
-            # Defining the minimal delta for each point (???)
-            for coord in range(4):
-                delta[coord] = (2 * point[coord] + 1) * fullvec - (2 * passedvec + catsizes[coord]) * catsizes[coord]
-
-            bestcoord = delta.index(min(delta))
-            passedvec += catsizes[bestcoord]
-            point[bestcoord] += 1
-
-            queue.append(bestcoord)
-        # ======================================================================
-        return queue
+    ##################################################################################
 
     ######################################
     #           ROS Subscriber           #
@@ -273,6 +180,8 @@ class Rapi:
                                  Float64MultiArray,
                                  __spectator_update,
                                  queue_size=500)
+                                 
+    # --------------------------------------------------------------------------------
 
     ######################################
     #           ROS Publisher            #
@@ -283,3 +192,6 @@ class Rapi:
                           queue_size=500)
 
     output = Int32MultiArray()
+    
+    # ------------------------------------------------------------------------------------
+    
