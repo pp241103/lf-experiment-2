@@ -1,5 +1,0 @@
-#!/bin/bash
-
-./ft-init
-sleep 7
-./ft-start
