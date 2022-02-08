@@ -68,7 +68,8 @@ class BaseApi:
     :type port: int in range (0, 112)
         """
         # r_print(in_ports)
-        return in_ports[0][port]
+        # print(f'in_ports: {in_ports}')
+        return in_ports[port]
 
     def send(self, value=None):
         """Send output ports values
@@ -135,6 +136,11 @@ class BaseApi:
                 conn.commit()
                 if result:
                     return cursor.fetchall()
+    
+    @staticmethod
+    def check_shares():
+        """Print wallet shares"""
+        print(f'- Wallet shares: {shares}')
 
     def get_color(self):
         """Get current color from analog sensor"""
@@ -156,7 +162,7 @@ class BaseApi:
 
         del in_ports[0: len(in_ports)]
         # noinspection PyUnresolvedReferences
-        in_ports.append(msg.data)
+        in_ports.extend(msg.data)
 
     sub = rospy.Subscriber("modbus_wrapper/input",
                            Int32MultiArray,
@@ -166,15 +172,14 @@ class BaseApi:
     # noinspection PyMethodParameters
     def __spectator_update(msg):
         """Service callback-function:
-        Read wallet shares and write them to list
-        Make wallet shares available in app
-            """
+    Read wallet shares and write them to list
+    Make wallet shares available in app
+        """
+        global shares
 
-    global shares
-
-    del shares[0: len(shares)]
-    # noinspection PyUnresolvedReferences
-    shares.append(msg.data)
+        del shares[0: len(shares)]
+        # noinspection PyUnresolvedReferences
+        shares.extend(msg.data)
 
     spectator = rospy.Subscriber("spectator",
                                  Float64MultiArray,

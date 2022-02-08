@@ -34,15 +34,22 @@ class MainApi(BaseApi):
     #          Service methods           #
     ######################################
 
-    def show_warehouse(self):
+    def show_warehouse(self, warehouse: int):
         """Show all warehouse' cells in the table
-        :param self: RApi object
+    :param warehouse: warehouse' number
+    :type warehouse: int in range (0, 2)
         """
-
-        table = self.execute('SELECT * FROM warehouse_arrival AS arr ORDER BY arr.column', True)
-
+        
+        if warehouse not in range(2):
+            print('- Error: incorrect warehouse!')
+            return
+        # ------------------------------------
+        if warehouse:
+            table = self.execute('SELECT * FROM warehouse_arrival AS arr ORDER BY arr.column', True)
+        else:
+            table = self.execute('SELECT * FROM warehouse_departure AS arr ORDER BY arr.column', True)
+        
         print('\n' + '-' * 49 + '\n|' + ' ' * 11 + '| line_1 | line_2 | line_3 | line_4 |\n' + '-' * 49)
-
         for row in table:
             print(f'| column_{row[0]:<2} |{row[1]:^8}|{row[2]:^8}|{row[3]:^8}|{row[4]:^8}|\n' + '-' * 49)
         print()
@@ -50,46 +57,52 @@ class MainApi(BaseApi):
     # --------------------------------------------------------------------------------
 
     def clear_warehouse(self):
-        """Clear all warehouse' cells in the database
-        :param self: RApi object
-        """
+        """Clear all arrival warehouse' cells in the database"""
 
         self.execute('UPDATE warehouse_arrival SET line_1 = 0, line_2 = 0, line_3 = 0, line_4 = 0')
-        print('- Database is cleared!')
+        print('- Arrival database is cleared!')
+    
+    def fill_warehouse(self):
+        """Fill all departure warehouse' cells in the database"""
+        
+        self.execute('UPDATE warehouse_departure SET line_1 = 1, line_2 = 1, line_3 = 1, line_4 = 1')
+        print('- Departure database is filled!')
 
     # --------------------------------------------------------------------------------
     def check_tasks(self):
-        """Check and add new tasks to the queue
-        :param self: RApi object
-        """
+        """Check and add new tasks to the queue"""
+        
+        old_shares = []
+        
         while triggers['checking']:
-            if not loader_0_tasks and triggers['waiting'] and get_queue(shares):
+            if not loader_0_tasks and (triggers['waiting'] or old_shares != shares):
+                
                 queue = [d + 1 for d in get_queue(shares)]
-                column = None
-                line = None
-                way = None
+                triggers['waiting'] = True
+                old_shares = shares.copy()
                 tasks = []
 
                 # make necessary tasks
-                table = self.execute('SELECT * FROM warehouse_arrival AS arr ORDER BY arr.column', True)
+                table = self.execute('SELECT * FROM warehouse_departure AS arr ORDER BY arr.column', True)
+                table = [list(table[i]) for i in range(12)]
                 for color in queue:
                     for i in range(len(table)):
                         if table[i][0] not in (color, color + 4, color + 8):
-                            continue  # for table
+                            continue  # for table: if necessary block cannot be in current column
                         for cell in range(1, 5):
                             if table[i][cell]:
                                 table[i][cell] = False
                                 column = table[i][0]
                                 line = cell
                                 way = color
-                                break  # for cells
+                                break  # for cells: if necessary block is in current column
                         else:
-                            continue  # for table
-                        break  # for table
+                            continue  # for table: if necessary block isn't in current column
+                        break  # for table: if necessary block is in table
                     else:
-                        print('- Warning: warehouse has no all necessary blocks, need to add them!')
                         triggers['waiting'] = False
-                        break  # for queue
+                        # print('- Warning: warehouse has no all necessary blocks, need to add them!')
+                        break  # for queue: if any necessary block isn't in table
                     tasks.append(((column, line), way))
                 else:
                     loader_0_tasks.extend(tasks)
@@ -98,16 +111,15 @@ class MainApi(BaseApi):
 
     # --------------------------------------------------------------------------------
     def add_blocks(self, *blocks):
-        """Add new blocks to the warehouse
-        :param self: RApi object
-        :param blocks: coordinates of new blocks
-        :type blocks: tuple of 2-element' tuples (column, line)
-                      - column: warehouse' column
-                                int in range (1, 13)
-                                counting from conveyor 1.1 to conveyor 4.1
-                      - line: warehouse' line
-                              int in range (1, 4)
-                              counting from bottom to top
+        """Add new blocks to the departure warehouse
+    :param blocks: coordinates of new blocks
+    :type blocks: tuple of 2-element' tuples (column, line)
+                - column: warehouse' column
+                          int in range (1, 13)
+                          counting from conveyor 1.1 to conveyor 4.1
+                - line: warehouse' line
+                        int in range (1, 4)
+                        counting from bottom to top
         """
 
         for block in blocks:
@@ -123,8 +135,8 @@ class MainApi(BaseApi):
             self.execute(
                 f'UPDATE warehouse_departure AS arr SET line_{block[1]} = 1 WHERE arr.column = {block[0]}')
 
-        print('- New blocks are added to the warehouse!')
         triggers['waiting'] = True
+        print('- New blocks are added to the warehouse!')
 
     ##################################################################################
 
@@ -134,139 +146,118 @@ class MainApi(BaseApi):
 
     def act0(self, direction: int, point: str):
         """Helping method 0 - loader' moving between the conveyors (loader 0)
-        :param self: RApi object
-        :param direction: direction' number
-        :type direction: int in range (0, 2)
-                         0 - conveyor 4.1, 1 - conveyor 1.1
-        :param point: conveyor' line
-        :type point: str in ('a', 'b', 'c', 'd')
+    :param direction: direction' number
+    :type direction: int in range (0, 2)
+                     0 - conveyor 4.1, 1 - conveyor 1.1
+    :param point: conveyor' line
+    :type point: str in ('a', 'b', 'c', 'd')
         """
 
         if triggers['R/S']:
             print('- Warning: factory is running!')
             return
-        if direction not in range(2):
+        elif direction not in range(2):
             print('- Error: incorrect direction!')
             return
-        if point not in ['a', 'b', 'c', 'd']:
+        elif point not in ['a', 'b', 'c', 'd']:
             print('- Error: incorrect point!')
             return
         # ------------------------------------
-        if point == 'a':
-            self.set(3 - direction, 99)
-        elif point == 'b':
-            self.set(3 - direction, 100)
-        elif point == 'c':
-            self.set(3 - direction, 101)
-        elif point == 'd':
-            self.set(3 - direction, 102)
+        self.set(3 - direction, 2 + ord(point))
 
     def act1(self, loader: int, direction: int, point: int):
         """Helping method 1 - loader' moving along the warehouse
-        :param self: RApi object
-        :param loader: loader' number
-        :type loader: int in range (0, 2)
-                      0 - loader 0, 1 - loader 1
-        :param direction: direction' number
-        :type direction: int in range (0, 2)
-                         0 - conveyor 4.1, 1 - conveyor 1.1 for loader 0
-                         1 - conveyor 4.5, 1 - opposite edge for loader 1
-        :param point: warehouse' column
-        :type point: int in range (1, 13)
-                     counting from conveyor 1.1 to conveyor 4.1 for loader 0
-                     counting from conveyor 4.5 to opposite edge for loader 1
+    :param loader: loader' number
+    :type loader: int in range (0, 2)
+                  0 - loader 0, 1 - loader 1
+    :param direction: direction' number
+    :type direction: int in range (0, 2)
+                     0 - conveyor 4.1, 1 - conveyor 1.1 for loader 0
+                     1 - conveyor 4.5, 1 - opposite edge for loader 1
+    :param point: warehouse' column
+    :type point: int in range (1, 13)
+                 counting from conveyor 1.1 to conveyor 4.1 for loader 0
+                 counting from conveyor 4.5 to opposite edge for loader 1
         """
 
         if triggers['R/S']:
             print('- Warning: factory is running!')
             return
-        if direction not in range(2):
+        elif loader not in range(2):
+            print('- Error: incorrect loader\' number!')
+            return
+        elif direction not in range(2):
             print('- Error: incorrect direction!')
             return
-        if point not in range(1, 13):
+        elif point not in range(1, 13):
             print('- Error: incorrect point!')
             return
         # ------------------------------------
-        if loader == 0:
-            self.set(3 - direction, point + 3)
-        elif loader == 1:
-            self.set(direction + 10, 75 + (12 - point))
+        if loader:
+            self.set(direction + 10, 87 - point))
         else:
-            print('- Error: incorrect loader number!')
+            self.set(3 - direction, point + 3)
 
     def act2(self, loader: int, direction: int, point: int):
         """Helping method 2 - loader' moving up and down
-        :param self: RApi object
-        :param loader: loader' number
-        :type loader: int in range (0, 2)
-                      0 - loader 0, 1 - loader 1
-        :param direction: direction' number
-        :type direction: int in range (0, 2)
-                         0 - moving up, 1 - moving down
-        :param point: warehouse' heights
-        :type point: list in range (8)
-                     counting from bottom to top
-                     even numbers - lines' numbers, odd numbers - lifting blocks
+    :param loader: loader' number
+    :type loader: int in range (0, 2)
+                  0 - loader 0, 1 - loader 1
+    :param direction: direction' number
+    :type direction: int in range (0, 2)
+                     0 - moving up, 1 - moving down
+    :param point: warehouse' heights
+    :type point: list in range (8)
+                 counting from bottom to top
+                 even numbers - lines' numbers, odd numbers - lifting blocks
         """
 
         if triggers['R/S']:
             print('- Warning: factory is running!')
             return
-        if direction not in range(2):
+        elif loader not in range(2):
+            print('- Error: incorrect loader\' number!')
+            return
+        elif direction not in range(2):
             print('- Error: incorrect direction!')
             return
-        if point not in range(1, 9):
+        elif point not in range(1, 9):
             print('- Error: incorrect point!')
             return
         # ------------------------------------
-        if loader == 0:
-            self.set(direction + 5, point + 16)
-        elif loader == 1:
+        if loader:
             self.set(direction + 13, point + 87)
         else:
-            print('- Error: incorrect loader number!')
+            self.set(direction + 5, point + 16)
 
     def act3(self, loader: int, action: int):
         """Helping method 3 - carriage' moving
-        :param self: RApi object
-        :param loader: loader' number
-        :type loader: int in range (0, 2)
-                      0 - loader 0, 1 - loader 1
-        :param action: action' number
-        :type action: int in range (1, 5)
-                      1 - moving towards conveyors to the middle sensor
-                      2 - moving towards conveyors to the external sensor
-                      3 - moving towards warehouse to the middle sensor
-                      4 - moving towards warehouse to the internal sensor
+    :param loader: loader' number
+    :type loader: int in range (0, 2)
+                  0 - loader 0, 1 - loader 1
+    :param action: action' number
+    :type action: int in range (1, 5)
+                  1 - moving towards conveyors to the middle sensor
+                  2 - moving towards conveyors to the external sensor
+                  3 - moving towards warehouse to the middle sensor
+                  4 - moving towards warehouse to the internal sensor
         """
 
         if triggers['R/S']:
             print('- Warning: factory is running!')
             return
-        if action not in range(1, 5):
+        elif loader not in range(2):
+            print('- Error: incorrect loader\' number!')
+            return
+        elif action not in range(1, 5):
             print('- Error: incorrect action!')
             return
         # ------------------------------------
-        if loader == 0:
-            if action == 1:
-                self.set(7, 26)
-            elif action == 2:
-                self.set(7, 27)
-            elif action == 3:
-                self.set(8, 26)
-            elif action == 4:
-                self.set(8, 25)
-        elif loader == 1:
-            if action == 1:
-                self.set(16, 97)
-            elif action == 2:
-                self.set(16, 96)
-            elif action == 3:
-                self.set(15, 97)
-            elif action == 4:
-                self.set(15, 98)
-        else:
-            print('- Error: incorrect loader number!')
+        acts = (((7, 26), (16, 97)),
+                ((7, 27), (16, 96)),
+                ((8, 26), (15, 97)),
+                ((8, 25), (15, 98)))
+        self.set(*acts[action-1][loader])
 
     ##################################################################################
 
@@ -275,35 +266,35 @@ class MainApi(BaseApi):
     ######################################
 
     def run_factory(self):
-        """Run the factory
-        :param self: RApi object
-        """
+        """Run the factory"""
 
         if not triggers['R/S']:
             triggers['checking'] = True
-            triggers['waiting'] = True
+            
             triggers['loader 0'] = True
             triggers['loader 1'] = True
             triggers['lights'] = True
 
             self.post.check_tasks()
+            
             self.post.run_loader_0()
             self.post.run_loader_1()
             self.post.run_lights()
 
             triggers['R/S'] = True
             print('- Factory is running!')
+        elif triggers['checking']:
+            print('- Warning: factory is already running!')
         else:
-            print('- Warning: factory is already running!' +
-                  '(checking new tasks is allowed)')
             triggers['checking'] = True
+            self.post.check_tasks()
+            print('- Warning: factory is already running!\n' +
+                  '(checking new tasks started)')
 
     # --------------------------------------------------------------------------------
 
     def stop_factory(self):
-        """Stop the factory
-        :param self: RApi object
-        """
+        """Stop the factory"""
 
         if triggers['R/S']:
             if not loader_0_tasks and not loader_1_tasks and not any(conveyors.values()):
@@ -323,9 +314,9 @@ class MainApi(BaseApi):
             else:
                 triggers['checking'] = False
                 if len(loader_0_tasks) > 1:
-                    loader_0_tasks.clear()
-                print('- Warning: not all tasks are completed!\n' +
-                      '(queue is cleared, checking new tasks is prohibited)')
+                    del loader_0_tasks[1:len(loader_0_tasks)]
+                print('- Warning: not all tasks are completed!' +
+                      '(queue is cleared, checking new tasks stopped)')
         else:
             print('- Warning: factory has already stopped!')
 
@@ -336,15 +327,13 @@ class MainApi(BaseApi):
     ######################################
 
     def run_loader_0(self):
-        """Pick up and deliver blocks to the conveyor
-        :param self: RApi object
-        """
+        """Pick up and deliver blocks to the conveyor"""
 
         start = 0
-        runlines = {1: self.post.run_line_a,
-                    2: self.post.run_line_b,
-                    3: self.post.run_line_c,
-                    4: self.post.run_line_d}
+        runlines = ('self.post.run_line_a()',
+                    'self.post.run_line_b()',
+                    'self.post.run_line_c()',
+                    'self.post.run_line_d()')
 
         while triggers['loader 0']:
             if loader_0_tasks and not conveyors[f'{loader_0_tasks[0][1]}.1']:
@@ -377,6 +366,10 @@ class MainApi(BaseApi):
                 self.set(8, 25)
                 self.set(5, (line + 8) * 2)
                 self.set(7, 26)
+                
+                # free the cell
+                self.execute(
+                    f'UPDATE warehouse_departure AS dep SET line_{line} = 0 WHERE dep.column = {column}')
 
                 # deliver the block
                 # (way*3-(4-way)//2) - navigation
@@ -395,7 +388,8 @@ class MainApi(BaseApi):
                 start = way
                 conveyors[f'{way}.1'] = True
                 # run the line in parallel
-                runlines[way]()
+                exec(runlines[way-1])
+                # runlines[way]()
 
                 loader_0_tasks.pop(0)
 
@@ -404,9 +398,7 @@ class MainApi(BaseApi):
     # --------------------------------------------------------------------------------
 
     def run_loader_1(self):
-        """Deliver and put blocks to the warehouse
-        :param self: RApi object
-        """
+        """Deliver and put blocks to the warehouse"""
 
         while triggers['loader 1']:
             if loader_1_tasks:
@@ -477,7 +469,6 @@ class MainApi(BaseApi):
         - Downtime = Green color
         - Moving = Yellow color
         - Work = Red color
-        :param self: RApi object
         """
 
         trig = [[True] * 3] * 4
@@ -577,9 +568,7 @@ class MainApi(BaseApi):
     ######################################
 
     def define_color(self):
-        """Move the block along the last conveyor' line, define its color
-        :param self: RApi object
-        """
+        """Move the block along the last conveyor' line, define its color"""
 
         # move from 4.3 to 4.4
         self.post.set(90, 72)
@@ -606,9 +595,7 @@ class MainApi(BaseApi):
     # --------------------------------------------------------------------------------
 
     def run_line_a(self):
-        """Deliver the block along the way A (handler 1)
-        :param self: RApi object
-        """
+        """Deliver the block along the way A (handler 1)"""
 
         # waiting for turn
         while conveyors['1.2']:
@@ -708,9 +695,7 @@ class MainApi(BaseApi):
     # --------------------------------------------------------------------------------
 
     def run_line_b(self):
-        """Deliver the block along the way B (handler 2)
-        :param self: RApi object
-        """
+        """Deliver the block along the way B (handler 2)"""
 
         # waiting for turn
         while conveyors['2.2']:
@@ -792,9 +777,7 @@ class MainApi(BaseApi):
     # --------------------------------------------------------------------------------
 
     def run_line_c(self):
-        """Deliver the block along the way C (handler 3)
-        :param self: RApi object
-        """
+        """Deliver the block along the way C (handler 3)"""
 
         # waiting for turn
         while conveyors['3.2']:
@@ -857,9 +840,7 @@ class MainApi(BaseApi):
     # --------------------------------------------------------------------------------
 
     def run_line_d(self):
-        """Deliver the block along the way D (handler 4)
-        :param self: RApi object
-        """
+        """Deliver the block along the way D (handler 4)"""
 
         # waiting for turn
         while conveyors['4.2']:

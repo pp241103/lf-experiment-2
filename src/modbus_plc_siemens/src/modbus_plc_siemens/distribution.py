@@ -60,22 +60,23 @@ def get_queue(shares):
     """Transform category sizes to block queue optimally
     catsizes = [cs1, cs2, cs3, cs4] - blocks numbers of each color category
     """
-    if not shares:
-        return 0
 
     # Defining catsizes matching the MSE-limit
-    amount = 1  # starting amount
-    lim = 0.03  # MSE-limit
-    while True:
-        error = 0
-        catsizes = get_sizes(shares, amount)
-        for cs, w in zip(catsizes, shares):
-            error += (cs / amount - w) ** 2
-        error = m.sqrt(error / 4)
-        if error > lim:
-            amount += 1
-        else:
-            break
+    #amount = 1  # starting amount
+    #lim = 0.03  # MSE-limit
+    #while True:
+        #error = 0
+        #catsizes = get_sizes(shares, amount)
+        #for cs, w in zip(catsizes, shares):
+            #error += (cs / amount - w) ** 2
+        #error = m.sqrt(error / 4)
+        #if error > lim:
+            #amount += 1
+        #else:
+            #break
+    
+    # Defining catsizes matching fixed amount
+    catsizes = get_sizes(shares, 10)
 
     # ======================================================================
     # Evenly distributing algorithm of block queue using dimensional method
@@ -101,6 +102,7 @@ def get_queue(shares):
     # ======================================================================
     return queue
 
+# ===============================================================================================================
 
 if __name__ == "__main__":
 
