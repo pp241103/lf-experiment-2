@@ -6,7 +6,7 @@ colors = {0: ' \033[43m   \033[0m',
           3: ' \033[45m   \033[0m'}
 
 
-# ===============================================================================================================
+# =======================================================================================================
 
 def get_sizes(shares, amount):
     """Transform wallet shares to category sizes optimally
@@ -56,53 +56,50 @@ def get_sizes(shares, amount):
         return [int(cs) for cs in catsizes]
 
 
-def get_queue(shares):
+def get_queue(shares, length=None):
     """Transform category sizes to block queue optimally
     catsizes = [cs1, cs2, cs3, cs4] - blocks numbers of each color category
     """
-
-    # Defining catsizes matching the MSE-limit
-    #amount = 1  # starting amount
-    #lim = 0.03  # MSE-limit
-    #while True:
-        #error = 0
-        #catsizes = get_sizes(shares, amount)
-        #for cs, w in zip(catsizes, shares):
-            #error += (cs / amount - w) ** 2
-        #error = m.sqrt(error / 4)
-        #if error > lim:
-            #amount += 1
-        #else:
-            #break
     
-    # Defining catsizes matching fixed amount
-    catsizes = get_sizes(shares, 10)
+    if length:  # Defining catsizes matching fixed amount
+        catsizes = get_sizes(shares, length)
+    else:  # Defining catsizes matching the MSE-limit
+        amount, lim = 1, 0.03  # starting amount / MSE-limit
+        while True:
+            catsizes = get_sizes(shares, amount)
+            error = m.sqrt(sum([(cs / amount - w) ** 2 for cs, w in zip(catsizes, shares)]) / 4)
+            if error > lim:
+                amount += 1
+            else:
+                break
 
     # ======================================================================
     # Evenly distributing algorithm of block queue using dimensional method
     # (catsizes = (cs1; cs2; cs3; cs4) - 4D-vector)
 
-    fullvec = sum([cs * cs for cs in catsizes])
-    passedvec = 0
-
-    point = [0] * 4
-    delta = [0] * 4
-    queue = []
+    norm_cs = m.sqrt(sum([cs * cs for cs in catsizes]))
+    point, delta, queue = [0] * 4, [0.] * 4, []
 
     for _ in range(sum(catsizes)):
-        # Defining the minimal delta for each point (???)
+        # Defining the minimal delta for each point
         for coord in range(4):
-            delta[coord] = (2 * point[coord] + 1) * fullvec - (2 * passedvec + catsizes[coord]) * catsizes[coord]
-
+            newpoint = point.copy()
+            newpoint[coord] += 1
+            
+            p_dot_cs = sum([p * cs for p, cs in zip(newpoint, catsizes)])
+            norm_p = m.sqrt(sum([p * p for p in newpoint]))
+            
+            delta[coord] = m.sqrt(abs(norm_p ** 2 - (p_dot_cs / norm_cs) ** 2))
+        
+        # Moving to the point with minimal delta
         bestcoord = delta.index(min(delta))
-        passedvec += catsizes[bestcoord]
         point[bestcoord] += 1
 
         queue.append(bestcoord)
     # ======================================================================
     return queue
 
-# ===============================================================================================================
+# =======================================================================================================
 
 if __name__ == "__main__":
 
@@ -117,10 +114,12 @@ if __name__ == "__main__":
 
             shares = [yellow, blue, green, purple]
             assert all(s >= 0 for s in shares) and sum(shares) == 1
-            queue = get_queue(shares)
+            length = int(input('Enter your length or zero: '))
+            assert length >= 0
+            
+            queue = get_queue(shares, length)
 
-            blocks = None
-            length = len(queue)
+            blocks, length = None, len(queue)
             for d, ln in zip(queue, range(length)):
                 blocks = blocks + colors[d]
                 if (ln + 1) % 20 == 0 and ln + 1 != length:
@@ -140,3 +139,61 @@ if __name__ == "__main__":
         except:
             print('- Error: incorrect entered data!\n' + '=' * 80 + '\n')
             continue
+
+# =======================================================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

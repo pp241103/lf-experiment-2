@@ -21,62 +21,79 @@ if __name__ == "__main__":
     modbus_port = 502
 
     modclient = None
-    R = MainApi()
+    M = MainApi()
 
     try:
         modclient = ModbusClient(modbus_host, modbus_port)
-        R.print("Modbus client session started")
+        M.print("Modbus client session started")
 
     except Exception as e:
-        R.error("Modbus client session didn't start")
-        R.error(f"REASON: {e}")
+        M.error("Modbus client session didn't start")
+        M.error(f"REASON: {e}")
         exit(1)
     
     # filling in_ports by pressing any button
-    R.print("(Press any button on the factory to proceed)")
+    M.print("(Press any button on the factory to proceed)")
     while not in_ports:
-        R.sleep(0.001)
-
+        M.sleep(0.001)
+    
+    # ----------------------------------------------------------------------------
+    
     ######################################
     #            Application             #
     ######################################
 
-    R.print("Available commands: "
-            "run, stop, exit / "
-            "show(.), fill, clear, add*(.) / "
-            "act*(.), set(.) / "
-            "color, shares")
+    M.print("Main commands: run, stop, exit\n"+
+            ' '*28+"Checking commands: color, shares\n"+
+            ' '*28+"Database commands: add (.), show (.), fill, clear\n"+
+            ' '*28+"Service commands: act0 (.), act1 (.), act2 (.), act3 (.), set (.), time (.)")
+    M.print("Command pattern: \'COMMAND\' or \'COMMAND ARGUMENTS\'")
 
     command = None
-    methods = {'run': R.run_factory,
-               'stop': R.stop_factory,
-               'fill': R.fill_warehouse,
+    methods = {'color': 'M.get_color',
+               'shares': 'M.check_shares',
                # 'info': describe_methods,
-               'clear': R.clear_warehouse,
-               'color': R.get_color,
-               'shares': R.check_shares}
+               
+               'run': 'M.run_factory',
+               'stop': 'M.stop_factory',
+               
+               'add': 'M.add_blocks',
+               'show': 'M.show_warehouse',
+               'fill': 'M.fill_warehouse',
+               'clear': 'M.clear_warehouse',
+               
+               'act1': 'M.act1', 'act1': 'M.act1', 'act1': 'M.act1', 'act1': 'M.act1',
+               'set': 'M.set', 'time': 'M.set_time'}
 
     while command != "exit":
-        command = input("Command: ")
+        command = input("Command: ").split(maxsplit=1)
+        command, args = (command[0], '') if len(command) == 1 else command
 
         try:
-            if command in ('run', 'stop', 'fill', 'clear', 'color', 'shares'):
-                methods[command]()
-            elif command.startswith(('act', 'add', 'set', 'show')):
-                exec(f'R.{command}')
+            if command in ('run', 'stop',
+                           'color', 'shares',
+                           'show', 'fill', 'clear', 'add',
+                           'act0', 'act1', 'act2', 'act3', 'set'):
+                exec(f'{methods[command]}({args})')
             elif command == "exit":
                 
                 # application closing
                 sys.tracebacklimit = 0
                 with suppress(Exception):
-                    R.print("Modbus client session is shutting down")
+                    M.print("Modbus client session is shutting down")
                     rospy.signal_shutdown("server shutting down")
                     # modclient.stopListening()
-
             else:
                 print('- This command is not available!')
                 # exec(command)
 
         except Exception as e:
-            R.error('Error while executing the command')
-            R.error(f"REASON: {e}")
+            M.error('Error while executing the command')
+            M.error(f"REASON: {e}")
+        
+##################################################################################
+
+
+
+
+

@@ -1,5 +1,6 @@
 from modbus.modbus_wrapper import ModbusWrapperClient
 
+# ===================================================
 
 class ModbusClient(ModbusWrapperClient):
     def __init__(self, host, port=502, rate=50):
@@ -18,4 +19,81 @@ class ModbusClient(ModbusWrapperClient):
         self.setReadingRegisters(0, 112)
         self.startListening()
 
-        self.readRegisters(0, 1)
+# ===================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

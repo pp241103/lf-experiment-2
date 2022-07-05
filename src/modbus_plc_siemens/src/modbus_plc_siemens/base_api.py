@@ -2,14 +2,11 @@ import psycopg2 as pg
 import rospy
 
 from std_msgs.msg import Int32MultiArray, Float64MultiArray
-# from modbus.process import ProcessWrapper
 from modbus.post_threading import Post
 from contextlib import closing
 
 # ------------------------------------------------------------------------------------
-shares = []
-in_ports = []
-out_ports = [0] * 106
+shares, in_ports, out_ports = [], [], [0] * 106
 
 
 ######################################################################################
@@ -130,7 +127,10 @@ class BaseApi:
     :return: SQL-query result
     :rtype: list of tuples
         """
-        with closing(pg.connect(user='postgres', password='panda', host='localhost', database='postgres')) as conn:
+        with closing(pg.connect(user='postgres',
+                                password='panda',
+                                host='localhost',
+                                database='postgres')) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(query)
                 conn.commit()
@@ -163,7 +163,6 @@ class BaseApi:
         del in_ports[0: len(in_ports)]
         # noinspection PyUnresolvedReferences
         in_ports.extend(msg.data)
-
     sub = rospy.Subscriber("modbus_wrapper/input",
                            Int32MultiArray,
                            __in_ports_update,
@@ -180,7 +179,6 @@ class BaseApi:
         del shares[0: len(shares)]
         # noinspection PyUnresolvedReferences
         shares.extend(msg.data)
-
     spectator = rospy.Subscriber("spectator",
                                  Float64MultiArray,
                                  __spectator_update,
@@ -195,7 +193,7 @@ class BaseApi:
     pub = rospy.Publisher("modbus_wrapper/output",
                           Int32MultiArray,
                           queue_size=500)
-
     output = Int32MultiArray()
 
 # ------------------------------------------------------------------------------------
+

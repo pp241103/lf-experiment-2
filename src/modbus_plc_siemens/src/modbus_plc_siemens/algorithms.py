@@ -6,6 +6,7 @@ from modbus_plc_siemens.distribution import get_queue
 
 loader_0_tasks = []
 loader_1_tasks = []
+handlers = [5, 5, 5, 5]
 
 conveyors = dict.fromkeys(('1.1', '1.2', '1.4',
                            '2.1', '2.2', '2.4',
@@ -69,47 +70,6 @@ class MainApi(BaseApi):
         print('- Departure database is filled!')
 
     # --------------------------------------------------------------------------------
-    def check_tasks(self):
-        """Check and add new tasks to the queue"""
-        
-        old_shares = []
-        
-        while triggers['checking']:
-            if not loader_0_tasks and (triggers['waiting'] or old_shares != shares):
-                
-                queue = [d + 1 for d in get_queue(shares)]
-                triggers['waiting'] = True
-                old_shares = shares.copy()
-                tasks = []
-
-                # make necessary tasks
-                table = self.execute('SELECT * FROM warehouse_departure AS arr ORDER BY arr.column', True)
-                table = [list(table[i]) for i in range(12)]
-                for color in queue:
-                    for i in range(len(table)):
-                        if table[i][0] not in (color, color + 4, color + 8):
-                            continue  # for table: if necessary block cannot be in current column
-                        for cell in range(1, 5):
-                            if table[i][cell]:
-                                table[i][cell] = False
-                                column = table[i][0]
-                                line = cell
-                                way = color
-                                break  # for cells: if necessary block is in current column
-                        else:
-                            continue  # for table: if necessary block isn't in current column
-                        break  # for table: if necessary block is in table
-                    else:
-                        triggers['waiting'] = False
-                        # print('- Warning: warehouse has no all necessary blocks, need to add them!')
-                        break  # for queue: if any necessary block isn't in table
-                    tasks.append(((column, line), way))
-                else:
-                    loader_0_tasks.extend(tasks)
-
-            self.sleep(0.001)
-
-    # --------------------------------------------------------------------------------
     def add_blocks(self, *blocks):
         """Add new blocks to the departure warehouse
     :param blocks: coordinates of new blocks
@@ -131,9 +91,9 @@ class MainApi(BaseApi):
                 return
 
         # take the cells
-        for block in blocks:
+        for b in blocks:
             self.execute(
-                f'UPDATE warehouse_departure AS arr SET line_{block[1]} = 1 WHERE arr.column = {block[0]}')
+                f'UPDATE warehouse_departure AS arr SET line_{b[1]} = 1 WHERE arr.column = {b[0]}')
 
         triggers['waiting'] = True
         print('- New blocks are added to the warehouse!')
@@ -194,7 +154,7 @@ class MainApi(BaseApi):
             return
         # ------------------------------------
         if loader:
-            self.set(direction + 10, 87 - point))
+            self.set(direction + 10, 87 - point)
         else:
             self.set(3 - direction, point + 3)
 
@@ -315,7 +275,7 @@ class MainApi(BaseApi):
                 triggers['checking'] = False
                 if len(loader_0_tasks) > 1:
                     del loader_0_tasks[1:len(loader_0_tasks)]
-                print('- Warning: not all tasks are completed!' +
+                print('- Warning: not all tasks are completed!\n' +
                       '(queue is cleared, checking new tasks stopped)')
         else:
             print('- Warning: factory has already stopped!')
@@ -325,7 +285,47 @@ class MainApi(BaseApi):
     ######################################
     #        Main running methods        #
     ######################################
+    
+    def check_tasks(self):
+        """Check and add new tasks to the queue"""
+        
+        old_shares = []
+        
+        while triggers['checking']:
+            if not loader_0_tasks and (triggers['waiting'] or old_shares != shares):
+                
+                queue = [d + 1 for d in get_queue(shares, 8)]
+                triggers['waiting'] = True
+                old_shares = shares.copy()
+                tasks = []
 
+                # make necessary tasks
+                table = self.execute('SELECT * FROM warehouse_departure AS arr ORDER BY arr.column', True)
+                table = [list(table[i]) for i in range(12)]
+                for color in queue:
+                    for i in range(len(table)):
+                        if table[i][0] not in (color, color + 4, color + 8):
+                            continue  # for table: if necessary block cannot be in current column
+                        for cell in range(1, 5):
+                            if table[i][cell]:
+                                table[i][cell] = False
+                                column, line, way = table[i][0], cell, color
+                                break  # for cells: if necessary block is in current column
+                        else:
+                            continue  # for table: if necessary block isn't in current column
+                        break  # for table: if necessary block is in table
+                    else:
+                        triggers['waiting'] = False
+                        # print('- Warning: warehouse has no all necessary blocks, need to add them!')
+                        break  # for queue: if any necessary block isn't in table
+                    tasks.append(((column, line), way))
+                else:
+                    loader_0_tasks.extend(tasks)
+
+            self.sleep(0.001)
+            
+    # --------------------------------------------------------------------------------
+            
     def run_loader_0(self):
         """Pick up and deliver blocks to the conveyor"""
 
@@ -403,9 +403,7 @@ class MainApi(BaseApi):
         while triggers['loader 1']:
             if loader_1_tasks:
 
-                color = loader_1_tasks[0]
-                column = None
-                line = None
+                column, line, color = None, None, loader_1_tasks[0]
 
                 # take necessary cells
                 table = self.execute('SELECT * FROM warehouse_arrival AS arr ORDER BY arr.column', True)
@@ -414,8 +412,7 @@ class MainApi(BaseApi):
                         continue
                     for cell in range(1, 5):
                         if not row[cell]:
-                            column = row[0]
-                            line = cell
+                            column, line = row[0], cell
                             break
                     else:
                         continue
@@ -539,7 +536,7 @@ class MainApi(BaseApi):
                 # handler' moving (yellow)
                 if self.get(66):
                     if trig[3][0]:
-                        self.set(85)
+                        self.set(84)
                         self.set(86, value=0)
                         trig[3] = [False, True, True]
                 # handler' work (red)
@@ -567,6 +564,21 @@ class MainApi(BaseApi):
     #         Conveyors methods          #
     ######################################
 
+    def set_time(self, time=5, num=0):
+        """Set handling' time for handlers"""
+        
+        if triggers['R/S']:
+            print('- Warning: factory is running!')
+            return
+        elif num not in range(4):
+            print('- Error: incorrect handler\' num!')
+            return
+        # ------------------------------------
+        if not num:
+            handlers[0], handlers[1], handlers[2], handlers[3] = (time,)*4
+        else:
+            handlers[num] = time
+        
     def define_color(self):
         """Move the block along the last conveyor' line, define its color"""
 
@@ -610,7 +622,7 @@ class MainApi(BaseApi):
         # handler work
         self.set(22, 34)
         self.set(24, 36)
-        self.set(26, time=3)
+        self.set(26, time=handlers[0])
         self.set(25, 37)
         self.set(23, 35)
 
@@ -710,7 +722,7 @@ class MainApi(BaseApi):
         # handler work
         self.set(41, 44)
         self.set(43, 46)
-        self.set(45, time=3)
+        self.set(45, time=handlers[1])
         self.set(44, 47)
         self.set(42, 45)
 
@@ -792,7 +804,7 @@ class MainApi(BaseApi):
         # handler work
         self.set(60, 54)
         self.set(62, 56)
-        self.set(64, time=3)
+        self.set(64, time=handlers[2])
         self.set(63, 57)
         self.set(61, 55)
 
@@ -856,7 +868,7 @@ class MainApi(BaseApi):
         self.set(79, 64)
         self.set(81, 66)
         self.set(96, time=1)
-        self.set(83, time=3)
+        self.set(83, time=handlers[3])
         self.set(82, 67)
         self.set(80, 65)
 
@@ -878,4 +890,10 @@ class MainApi(BaseApi):
         # move to warehouse 1
         self.define_color()
 
-    # --------------------------------------------------------------------------------
+######################################################################################
+
+
+
+
+
+
