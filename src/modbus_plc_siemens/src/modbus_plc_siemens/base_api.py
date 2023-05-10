@@ -1,44 +1,45 @@
 import psycopg2 as pg
+import time as t
 import rospy
 
-from std_msgs.msg import Int32MultiArray, Float64MultiArray
-from modbus.post_threading import Post
+from modbus_plc_siemens.modbus_api import ModbusApi
+from modbus_plc_siemens.post_threading import Post
+from std_msgs.msg import Float64MultiArray
 from contextlib import closing
-
-# ------------------------------------------------------------------------------------
-shares, in_ports, out_ports = [], [], [0] * 106
 
 
 ######################################################################################
 
-##########################################
-#           ROS and FT methods           #
-##########################################
+def print_message(message):
+    print(f"\033[36m{message}\033[0m")
+
+
+def print_error(error):
+    print(f"\033[31m{error}\033[0m")
+
 
 class BaseApi:
 
-    def __init__(self):
+    def __init__(self, host, port):
+        self.shares = []
+
+        rospy.init_node("LF_project_app")
+        rospy.Subscriber("spectator",
+                         Float64MultiArray,
+                         self.spectator_update,
+                         queue_size=500)
+
+        # there will be publisher + subscriber
+        # for web-application as another process
+
         self.post = Post(self)
 
-    ######################################
-    #          Main FT methods           #
-    ######################################
+        self.client = ModbusApi(host, port)
+        if self.client.start_socket() == -1:
+            self.exit_program(1) # failed connection
 
-    @staticmethod
-    def print(msg: str):
-        """Print ROS' message
-    :param msg: message to print
-    :type msg: str
-        """
-        rospy.loginfo(msg)
-
-    @staticmethod
-    def error(msg: str):
-        """Print ROS' error-message
-    :param msg: message to print
-    :type msg: str
-        """
-        rospy.logerr(msg)
+        print_message("- Client was succesfully initialized!")
+        print_message(f"  ({host}:{port})")
 
     ##################################################################################
 
@@ -48,39 +49,51 @@ class BaseApi:
     :param time: seconds to sleep
     :type time: float
         """
-        rospy.sleep(time)
+        t.sleep(time)
 
     @staticmethod
-    def wait():
-        """Waiting for 'Ctrl-C'
-        """
-        rospy.spin()
+    def print_help():
+        print_message("\n- Main commands: \n" +
+                " 1. run    | run the factory \n" +
+                " 2. stop   | stop the factory \n" +
+                " 2. exit   | exit the program \n" +
+                " 3. break  | break the process")
+        print_message("\n- Checking commands: \n" +
+                " 1. get    | get register value \n" +
+                " 2. clr    | check actual sensor' color \n" +
+                " 3. shrs   | check actual wallets' shares")
+        print_message("\n- Database commands: \n" +
+                " 1. add    | fill scecific cells in departure' table \n" +
+                " 2. show   | show all departure/arrival' table \n" +
+                " 3. fill   | fill all departure' table \n" +
+                " 4. clear  | clear all arrival' table")
+        print_message("\n- Service commands: \n" +
+                " 1. time   | set time of block' handling \n" +
+                " 2. acts   | move loaders in specific way \n" +
+                " 3. set    | set register in specific way")
+        print_message("\nCommand pattern: \'COMMAND [ARG1 ARG2 ...]\'\n")
+
+    def exit_program(self, code=0):
+        self.post.killall()
+        
+        self.client.null_registers()
+        self.client.stop_socket()
+
+        rospy.signal_shutdown("\nRospy is shutting down...")
+        print_message("\nClient is shutting down...")
+        exit(code) # hard exit
 
     ##################################################################################
 
-    @staticmethod
-    def get(port: int):
+    def get(self, port: int):
         """Get input port value
     :param port: input port number
     :type port: int in range (0, 112)
         """
-        # r_print(in_ports)
-        # print(f'in_ports: {in_ports}')
-        return in_ports[port]
-
-    def send(self, value=None):
-        """Send output ports values
-    :param value: output ports values to send
-    :type value: list in range (112)
-        """
-        output = self.output
-
-        if value is None:
-            output.data = out_ports
-        else:
-            output.data = value
-
-        self.pub.publish(output)
+        value = self.client.get_register(port)
+        if value == -1: # lost connection
+            self.exit_program(1)
+        return value
 
     def set(self, port, sensor=None, time=None, value=1):
         """Set output port value in a special way
@@ -94,26 +107,25 @@ class BaseApi:
     :param value: value to set, defaults to 1
     :type value: int in range (0, 2)
         """
-        global out_ports
 
-        out_ports[port] = value
-        self.send(out_ports)
-
-        if value == 0:
+        ret = self.client.set_register(port, value)
+        if ret == -1: # lost connection
+            self.exit_program(1)
+        elif ret == -2:
             return
-        elif sensor:
+
+        if value == 0 or (not sensor and not time):
+            return
+        if sensor:
             value = self.get(sensor)
             while self.get(sensor) == value:
                 self.sleep(0.001)
-            if time:
-                self.sleep(time)
-        elif time:
+        if time:
             self.sleep(time)
-        else:
-            return
 
-        out_ports[port] = 0
-        self.send(out_ports)
+        ret = self.client.set_register(port, 0)
+        if ret == -1: # lost connection
+            self.exit_program(1)
 
     ##################################################################################
 
@@ -136,64 +148,26 @@ class BaseApi:
                 conn.commit()
                 if result:
                     return cursor.fetchall()
-    
-    @staticmethod
-    def check_shares():
+
+    def check_shares(self):
         """Print wallet shares"""
-        print(f'- Wallet shares: {shares}')
+        print_message(f'- Wallet shares: {self.shares}')
 
     def get_color(self):
         """Get current color from analog sensor"""
-        print(f'- Current color: {self.get(0)}')
+        print_message(f'- Current color: {self.get(0)}')
+
+    def get_register(self, port):
+        print_message(f'- Register {port}: {self.get(port)}')
 
     ##################################################################################
 
-    ######################################
-    #           ROS Subscriber           #
-    ######################################
-
-    # noinspection PyMethodParameters
-    def __in_ports_update(msg):
-        """Service callback-function:
-    Read input ports and write them to list
-    Make input ports available in app
-        """
-        global in_ports
-
-        del in_ports[0: len(in_ports)]
-        # noinspection PyUnresolvedReferences
-        in_ports.extend(msg.data)
-    sub = rospy.Subscriber("modbus_wrapper/input",
-                           Int32MultiArray,
-                           __in_ports_update,
-                           queue_size=500)
-
-    # noinspection PyMethodParameters
-    def __spectator_update(msg):
+    def spectator_update(self, msg):
         """Service callback-function:
     Read wallet shares and write them to list
     Make wallet shares available in app
         """
-        global shares
-
-        del shares[0: len(shares)]
-        # noinspection PyUnresolvedReferences
-        shares.extend(msg.data)
-    spectator = rospy.Subscriber("spectator",
-                                 Float64MultiArray,
-                                 __spectator_update,
-                                 queue_size=500)
-
-    # --------------------------------------------------------------------------------
-
-    ######################################
-    #           ROS Publisher            #
-    ######################################
-
-    pub = rospy.Publisher("modbus_wrapper/output",
-                          Int32MultiArray,
-                          queue_size=500)
-    output = Int32MultiArray()
+        del self.shares[0: len(self.shares)]
+        self.shares.extend(msg.data)
 
 # ------------------------------------------------------------------------------------
-

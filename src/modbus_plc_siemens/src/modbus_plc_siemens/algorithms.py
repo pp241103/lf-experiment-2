@@ -1,5 +1,7 @@
-from modbus_plc_siemens.base_api import shares, BaseApi
+from modbus_plc_siemens.base_api import print_error
+from modbus_plc_siemens.base_api import print_message
 from modbus_plc_siemens.distribution import get_queue
+from modbus_plc_siemens.base_api import BaseApi
 
 # ------------------------------------------------------------------------------------
 # helping data structures for the algorithm
@@ -23,7 +25,7 @@ triggers = dict.fromkeys(('R/S',
                           'lights'), False)
 
 
-######################################################################################
+######################################################################################triggers['waiting']
 
 ##########################################
 #        Main algorithmic methods        #
@@ -40,19 +42,19 @@ class MainApi(BaseApi):
     :param warehouse: warehouse' number
     :type warehouse: int in range (0, 2)
         """
-        
+
         if warehouse not in range(2):
-            print('- Error: incorrect warehouse!')
+            print_error('- Error: incorrect warehouse!')
             return
         # ------------------------------------
         if warehouse:
             table = self.execute('SELECT * FROM warehouse_arrival AS arr ORDER BY arr.column', True)
         else:
             table = self.execute('SELECT * FROM warehouse_departure AS arr ORDER BY arr.column', True)
-        
-        print('\n' + '-' * 49 + '\n|' + ' ' * 11 + '| line_1 | line_2 | line_3 | line_4 |\n' + '-' * 49)
+
+        print_message('\n' + '-' * 49 + '\n|' + ' ' * 11 + '| line_1 | line_2 | line_3 | line_4 |\n' + '-' * 49)
         for row in table:
-            print(f'| column_{row[0]:<2} |{row[1]:^8}|{row[2]:^8}|{row[3]:^8}|{row[4]:^8}|\n' + '-' * 49)
+            print_message(f'| column_{row[0]:<2} |{row[1]:^8}|{row[2]:^8}|{row[3]:^8}|{row[4]:^8}|\n' + '-' * 49)
         print()
 
     # --------------------------------------------------------------------------------
@@ -61,13 +63,13 @@ class MainApi(BaseApi):
         """Clear all arrival warehouse' cells in the database"""
 
         self.execute('UPDATE warehouse_arrival SET line_1 = 0, line_2 = 0, line_3 = 0, line_4 = 0')
-        print('- Arrival database is cleared!')
-    
+        print_message('- Arrival database is cleared!')
+
     def fill_warehouse(self):
         """Fill all departure warehouse' cells in the database"""
-        
+
         self.execute('UPDATE warehouse_departure SET line_1 = 1, line_2 = 1, line_3 = 1, line_4 = 1')
-        print('- Departure database is filled!')
+        print_message('- Departure database is filled!')
 
     # --------------------------------------------------------------------------------
     def add_blocks(self, *blocks):
@@ -84,10 +86,10 @@ class MainApi(BaseApi):
 
         for block in blocks:
             if (not isinstance(block, tuple)) or (len(block) != 2):
-                print('- Error: incorrect coordinates structure!')
+                print_error('- Error: incorrect coordinates structure!')
                 return
             elif (block[0] not in range(1, 13)) or (block[1] not in range(1, 5)):
-                print('- Error: incorrect coordinates values!')
+                print_error('- Error: incorrect coordinates values!')
                 return
 
         # take the cells
@@ -96,7 +98,7 @@ class MainApi(BaseApi):
                 f'UPDATE warehouse_departure AS arr SET line_{b[1]} = 1 WHERE arr.column = {b[0]}')
 
         triggers['waiting'] = True
-        print('- New blocks are added to the warehouse!')
+        print_message('- New blocks are added to the warehouse!')
 
     ##################################################################################
 
@@ -114,13 +116,13 @@ class MainApi(BaseApi):
         """
 
         if triggers['R/S']:
-            print('- Warning: factory is running!')
+            print_message('- Warning: factory is running!')
             return
         elif direction not in range(2):
-            print('- Error: incorrect direction!')
+            print_error('- Error: incorrect direction!')
             return
         elif point not in ['a', 'b', 'c', 'd']:
-            print('- Error: incorrect point!')
+            print_error('- Error: incorrect point!')
             return
         # ------------------------------------
         self.set(3 - direction, 2 + ord(point))
@@ -141,16 +143,16 @@ class MainApi(BaseApi):
         """
 
         if triggers['R/S']:
-            print('- Warning: factory is running!')
+            print_message('- Warning: factory is running!')
             return
         elif loader not in range(2):
-            print('- Error: incorrect loader\' number!')
+            print_error('- Error: incorrect loader\' number!')
             return
         elif direction not in range(2):
-            print('- Error: incorrect direction!')
+            print_error('- Error: incorrect direction!')
             return
         elif point not in range(1, 13):
-            print('- Error: incorrect point!')
+            print_error('- Error: incorrect point!')
             return
         # ------------------------------------
         if loader:
@@ -173,16 +175,16 @@ class MainApi(BaseApi):
         """
 
         if triggers['R/S']:
-            print('- Warning: factory is running!')
+            print_message('- Warning: factory is running!')
             return
         elif loader not in range(2):
-            print('- Error: incorrect loader\' number!')
+            print_error('- Error: incorrect loader\' number!')
             return
         elif direction not in range(2):
-            print('- Error: incorrect direction!')
+            print_error('- Error: incorrect direction!')
             return
         elif point not in range(1, 9):
-            print('- Error: incorrect point!')
+            print_error('- Error: incorrect point!')
             return
         # ------------------------------------
         if loader:
@@ -204,20 +206,20 @@ class MainApi(BaseApi):
         """
 
         if triggers['R/S']:
-            print('- Warning: factory is running!')
+            print_message('- Warning: factory is running!')
             return
         elif loader not in range(2):
-            print('- Error: incorrect loader\' number!')
+            print_error('- Error: incorrect loader\' number!')
             return
         elif action not in range(1, 5):
-            print('- Error: incorrect action!')
+            print_error('- Error: incorrect action!')
             return
         # ------------------------------------
         acts = (((7, 26), (16, 97)),
                 ((7, 27), (16, 96)),
                 ((8, 26), (15, 97)),
                 ((8, 25), (15, 98)))
-        self.set(*acts[action-1][loader])
+        self.set(*acts[action - 1][loader])
 
     ##################################################################################
 
@@ -229,27 +231,33 @@ class MainApi(BaseApi):
         """Run the factory"""
 
         if not triggers['R/S']:
+            # check if loaders are in the right positions
+            if not (self.get(4) and self.get(17) and (not self.get(26)) and self.get(86) and self.get(88) and (not self.get(97))):
+                print_message('- Warning: loaders are not in the right positions!')
+                return
+                
             triggers['checking'] = True
-            
+
             triggers['loader 0'] = True
             triggers['loader 1'] = True
             triggers['lights'] = True
 
             self.post.check_tasks()
-            
+
             self.post.run_loader_0()
             self.post.run_loader_1()
             self.post.run_lights()
 
             triggers['R/S'] = True
-            print('- Factory is running!')
+            print_message('- Factory is running!')
+            
         elif triggers['checking']:
-            print('- Warning: factory is already running!')
+            print_message('- Warning: factory is already running!')
         else:
             triggers['checking'] = True
             self.post.check_tasks()
-            print('- Warning: factory is already running!\n' +
-                  '(checking new tasks started)')
+            print_message('- Warning: factory is already running!\n' +
+                          '(checking new tasks started)')
 
     # --------------------------------------------------------------------------------
 
@@ -270,33 +278,67 @@ class MainApi(BaseApi):
 
                 triggers['lights'] = False
                 triggers['R/S'] = False
-                print('- Factory is stopped!')
+                print_message('- Factory is stopped!')
             else:
                 triggers['checking'] = False
                 if len(loader_0_tasks) > 1:
                     del loader_0_tasks[1:len(loader_0_tasks)]
-                print('- Warning: not all tasks are completed!\n' +
-                      '(queue is cleared, checking new tasks stopped)')
+                print_message('- Warning: not all tasks are completed!\n' +
+                              '(queue is cleared, checking new tasks stopped)')
         else:
-            print('- Warning: factory has already stopped!')
+            print_message('- Warning: factory has already stopped!')
+            
+    # --------------------------------------------------------------------------------
+            
+    def break_factory(self):
+        """Break the factory process immediately
+        (its not recommended to use this function)"""
+        
+        # step 1: reset all triggers
+        triggers['checking'] = False
+        triggers['loader 0'] = False
+        triggers['loader 1'] = False
+
+        triggers['lights'] = False
+        triggers['R/S'] = False
+        
+        # step 2: reset all arrays
+        del loader_0_tasks[1:len(loader_0_tasks)]
+        del loader_1_tasks[1:len(loader_1_tasks)]
+        
+        global conveyors
+        conveyors = dict.fromkeys(conveyors, False)
+        
+        queues['2.3'].clear()
+        queues['3.3'].clear()
+        queues['4.3'].clear()
+        
+        # step 3: kill all threads
+        self.post.killall()
+        
+        # step 4: null all registers
+        ret = self.client.null_registers()
+        if ret == -1: # lost connection
+            self.exit_program(1)
+
 
     ##################################################################################
 
     ######################################
     #        Main running methods        #
     ######################################
-    
+
     def check_tasks(self):
         """Check and add new tasks to the queue"""
-        
+
         old_shares = []
-        
+
         while triggers['checking']:
-            if not loader_0_tasks and (triggers['waiting'] or old_shares != shares):
-                
-                queue = [d + 1 for d in get_queue(shares, 8)]
+            if not loader_0_tasks and (triggers['waiting'] or old_shares != self.shares):
+
+                queue = [d + 1 for d in get_queue(self.shares, 8)]
                 triggers['waiting'] = True
-                old_shares = shares.copy()
+                old_shares = self.shares.copy()
                 tasks = []
 
                 # make necessary tasks
@@ -323,9 +365,9 @@ class MainApi(BaseApi):
                     loader_0_tasks.extend(tasks)
 
             self.sleep(0.001)
-            
+
     # --------------------------------------------------------------------------------
-            
+
     def run_loader_0(self):
         """Pick up and deliver blocks to the conveyor"""
 
@@ -366,7 +408,7 @@ class MainApi(BaseApi):
                 self.set(8, 25)
                 self.set(5, (line + 8) * 2)
                 self.set(7, 26)
-                
+
                 # free the cell
                 self.execute(
                     f'UPDATE warehouse_departure AS dep SET line_{line} = 0 WHERE dep.column = {column}')
@@ -388,7 +430,7 @@ class MainApi(BaseApi):
                 start = way
                 conveyors[f'{way}.1'] = True
                 # run the line in parallel
-                exec(runlines[way-1])
+                exec(runlines[way - 1])
                 # runlines[way]()
 
                 loader_0_tasks.pop(0)
@@ -427,16 +469,16 @@ class MainApi(BaseApi):
                 self.set(13, 89)
                 self.set(15, 97)
                 conveyors['4.5'] = False
+                
+                # move to necessary column
+                # (75+(12-column)) - column' register
+                if column != 1:
+                    self.set(10, 75 + (12 - column))
 
                 # move to necessary line
                 # (line+43)*2+1) - line' register
                 if line != 1:
                     self.set(13, (line + 43) * 2 + 1)
-
-                # move to necessary column
-                # (75+(12-column)) - column' register
-                if column != 1:
-                    self.set(10, 75 + (12 - column))
 
                 # =========================================================
                 # put the block
@@ -564,21 +606,22 @@ class MainApi(BaseApi):
     #         Conveyors methods          #
     ######################################
 
-    def set_time(self, time=5, num=0):
+    @staticmethod
+    def set_time(time=5, num=0):
         """Set handling' time for handlers"""
-        
+
         if triggers['R/S']:
-            print('- Warning: factory is running!')
+            print_message('- Warning: factory is running!')
             return
         elif num not in range(4):
-            print('- Error: incorrect handler\' num!')
+            print_error('- Error: incorrect handler\' num!')
             return
         # ------------------------------------
         if not num:
-            handlers[0], handlers[1], handlers[2], handlers[3] = (time,)*4
+            handlers[0], handlers[1], handlers[2], handlers[3] = (time,) * 4
         else:
             handlers[num] = time
-        
+
     def define_color(self):
         """Move the block along the last conveyor' line, define its color"""
 
@@ -601,7 +644,7 @@ class MainApi(BaseApi):
 
         # move from 4.4 to 4.5
         self.post.set(93, 73)
-        self.set(95, 73, time=0.2)
+        self.set(95, 73, time=0.25)
         conveyors['4.4'] = False
 
     # --------------------------------------------------------------------------------
@@ -891,9 +934,3 @@ class MainApi(BaseApi):
         self.define_color()
 
 ######################################################################################
-
-
-
-
-
-

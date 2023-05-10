@@ -1,99 +1,92 @@
 #!/usr/bin/env python
-import gnureadline
-import sys
 
-from contextlib import suppress
 from modbus_plc_siemens.algorithms import MainApi
-from modbus_plc_siemens.client_init import ModbusClient
-from modbus_plc_siemens.base_api import rospy, in_ports
+from modbus_plc_siemens.base_api import print_error
+from modbus_plc_siemens.labels import *
+
+import gnureadline
+
+#  Peter
+import asyncio
+import websockets
+from threading import Thread
+
+##################################################################################
+
+async def in_command():
+    return input("Command: ").split()
+
+async def main(host, port):
+    lf = MainApi(host, port)
+    lf.print_help()
+
+    methods = {
+        'run': 'lf.run_factory',
+        'stop': 'lf.stop_factory',
+        'break': 'lf.break_factory',
+
+        'help': 'lf.print_help',
+        'exit': 'lf.exit_program',
+
+        'clr': 'lf.get_color',
+        'shrs': 'lf.check_shares',
+
+        'set': 'lf.set',
+        'time': 'lf.set_time',
+        'get': 'lf.get_register',
+
+        'add': 'lf.add_blocks',
+        'show': 'lf.show_warehouse',
+        'fill': 'lf.fill_warehouse',
+        'clear': 'lf.clear_warehouse',
+
+        'act1': 'lf.act1',
+        'act2': 'lf.act2',
+        'act3': 'lf.act3',
+        'act4': 'lf.act4'
+    }
+
+
+    # ----------------------------------------------------------------------------
+
+    while True:
+        command = await in_command()
+        if not command:
+            continue
+        args = "" if (len(command) == 1) else ",".join(command[1:])
+
+        if command[0] in (
+                'help', 'exit',
+                'clr', 'shrs',
+                'set', 'time', 'get',
+                'run', 'stop', 'break',
+                'add', 'show', 'fill', 'clear',
+                'act0', 'act1', 'act2', 'act3'
+        ):
+            try:
+                exec(f'{methods[command[0]]}({args})')
+            except Exception as e:
+                print_error(f"- Execution error: {e}")
+        else:
+            print_error("- Warning: this command is not available!")
+
+
+##################################################################################
+
+#  Peter
+async def handler(websocket):
+    async for message in websocket:
+        print(message)
+
+async def run_ws_server():
+    async with websockets.serve(handler, "", 8001):
+        await asyncio.Future()  # run forever
+
+def main_ws():
+    asyncio.run(run_ws_server())
 
 ##################################################################################
 
 if __name__ == "__main__":
-
-    ######################################
-    #           Initialisation           #
-    ######################################
-
-    rospy.init_node("modbus_client_app")
-
-    modbus_host = "192.168.88.199"
-    modbus_port = 502
-
-    modclient = None
-    M = MainApi()
-
-    try:
-        modclient = ModbusClient(modbus_host, modbus_port)
-        M.print("Modbus client session started")
-
-    except Exception as e:
-        M.error("Modbus client session didn't start")
-        M.error(f"REASON: {e}")
-        exit(1)
-    
-    # filling in_ports by pressing any button
-    M.print("(Press any button on the factory to proceed)")
-    while not in_ports:
-        M.sleep(0.001)
-    
-    # ----------------------------------------------------------------------------
-    
-    ######################################
-    #            Application             #
-    ######################################
-
-    M.print("Main commands: run, stop, exit\n"+
-            ' '*28+"Checking commands: color, shares\n"+
-            ' '*28+"Database commands: add (.), show (.), fill, clear\n"+
-            ' '*28+"Service commands: act0 (.), act1 (.), act2 (.), act3 (.), set (.), time (.)")
-    M.print("Command pattern: \'COMMAND\' or \'COMMAND ARGUMENTS\'")
-
-    command = None
-    methods = {'color': 'M.get_color',
-               'shares': 'M.check_shares',
-               # 'info': describe_methods,
-               
-               'run': 'M.run_factory',
-               'stop': 'M.stop_factory',
-               
-               'add': 'M.add_blocks',
-               'show': 'M.show_warehouse',
-               'fill': 'M.fill_warehouse',
-               'clear': 'M.clear_warehouse',
-               
-               'act1': 'M.act1', 'act1': 'M.act1', 'act1': 'M.act1', 'act1': 'M.act1',
-               'set': 'M.set', 'time': 'M.set_time'}
-
-    while command != "exit":
-        command = input("Command: ").split(maxsplit=1)
-        command, args = (command[0], '') if len(command) == 1 else command
-
-        try:
-            if command in ('run', 'stop',
-                           'color', 'shares',
-                           'show', 'fill', 'clear', 'add',
-                           'act0', 'act1', 'act2', 'act3', 'set'):
-                exec(f'{methods[command]}({args})')
-            elif command == "exit":
-                
-                # application closing
-                sys.tracebacklimit = 0
-                with suppress(Exception):
-                    M.print("Modbus client session is shutting down")
-                    rospy.signal_shutdown("server shutting down")
-                    # modclient.stopListening()
-            else:
-                print('- This command is not available!')
-                # exec(command)
-
-        except Exception as e:
-            M.error('Error while executing the command')
-            M.error(f"REASON: {e}")
-        
-##################################################################################
-
-
-
-
-
+    Thread(target = main_ws).start()
+    asyncio.run(main("192.168.88.199", 502))
